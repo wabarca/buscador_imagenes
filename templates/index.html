@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Buscador de Imágenes Satelitales</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .imagen-container {
+            display: inline-block;
+            margin: 10px;
+            text-align: center;
+        }
+        .imagen-container img {
+            max-width: 250px;
+            max-height: 250px;
+            display: block;
+            margin: auto;
+        }
+    </style>
+</head>
+<body class="container py-4">
+    <h1 class="mb-4">Buscador de Imágenes Satelitales</h1>
+
+    <form method="POST" action="/buscar">
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <label for="satelite" class="form-label">Satélite</label>
+                <select class="form-select" id="satelite" name="satelite" required>
+                    {% for sat in satelites %}
+                    <option value="{{ sat }}" {% if sat == selected_satelite %}selected{% endif %}>{{ sat }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="producto" class="form-label">Producto</label>
+                <select class="form-select" id="producto" name="producto">
+                    <option value="">(Todos)</option>
+                    {% for prod in productos %}
+                    <option value="{{ prod }}" {% if prod == selected_producto %}selected{% endif %}>{{ prod }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="fecha_inicio" class="form-label">Fecha inicio</label>
+                <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="{{ fecha_inicio }}" required>
+            </div>
+            <div class="col-md-3">
+                <label for="fecha_fin" class="form-label">Fecha fin</label>
+                <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="{{ fecha_fin }}" required>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <label for="hora_inicio" class="form-label">Hora inicio (UTC)</label>
+                <select class="form-select" id="hora_inicio" name="hora_inicio">
+                    <option value="">(Todas)</option>
+                    {% for h in range(0, 24) %}
+                        {% for m in [0,5,10,15,20,25,30,35,40,45,50,55] %}
+                        {% set hora = "{:02d}:{:02d}".format(h, m) %}
+                        <option value="{{ hora }}" {% if hora == hora_inicio %}selected{% endif %}>{{ hora }}</option>
+                        {% endfor %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="hora_fin" class="form-label">Hora fin (UTC)</label>
+                <select class="form-select" id="hora_fin" name="hora_fin">
+                    <option value="">(Todas)</option>
+                    {% for h in range(0, 24) %}
+                        {% for m in [0,5,10,15,20,25,30,35,40,45,50,55] %}
+                        {% set hora = "{:02d}:{:02d}".format(h, m) %}
+                        <option value="{{ hora }}" {% if hora == hora_fin %}selected{% endif %}>{{ hora }}</option>
+                        {% endfor %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Buscar</button>
+    </form>
+
+    <hr>
+
+    {% if imagenes %}
+    <div class="mb-3">
+        <button class="btn btn-success" onclick="descargarZip()">📦 Descargar ZIP</button>
+    </div>
+
+    <div id="imagenes-lista">
+        {% for img in imagenes %}
+        <div class="imagen-container">
+            <img src="/Output/{{ img.ruta }}" alt="{{ img.fecha }}">
+            <div>{{ img.fecha }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% elif request.method == 'POST' %}
+        <p class="text-muted">No se encontraron imágenes con los criterios seleccionados.</p>
+    {% endif %}
+
+    <script>
+        document.getElementById("satelite").addEventListener("change", function() {
+            fetch("/productos?satelite=" + this.value)
+                .then(response => response.json())
+                .then(data => {
+                    const productoSelect = document.getElementById("producto");
+                    productoSelect.innerHTML = '<option value="">(Todos)</option>';
+                    data.forEach(prod => {
+                        const option = document.createElement("option");
+                        option.value = prod;
+                        option.textContent = prod;
+                        productoSelect.appendChild(option);
+                    });
+                });
+        });
+
+        function descargarZip() {
+            const imagenes = [
+                {% for img in imagenes %}
+                { ruta: "{{ img.ruta }}" },
+                {% endfor %}
+            ];
+
+            fetch("/descargar_zip", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ imagenes: imagenes })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error("Error al descargar ZIP");
+                return response.blob();
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "imagenes.zip";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            })
+            .catch(error => alert("No se pudo generar el ZIP: " + error));
+        }
+    </script>
+</body>
+</html>
